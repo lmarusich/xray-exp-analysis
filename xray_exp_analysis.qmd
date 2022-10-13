@@ -1,0 +1,118 @@
+---
+title: "XRay Experiment Analysis"
+format: html
+editor: visual
+---
+
+## setup
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(lme4)
+library(sjPlot)
+```
+
+## Read in Excel File
+
+```{r}
+dat <- read_csv("Experiment Results.csv", name_repair = "universal")
+dat <- dat %>%
+  select(-Consent.Time)
+```
+
+## Restructure Data
+
+```{r}
+demo_data <- dat %>%
+  filter(!is.na(Name)) %>%
+  select(2:10)  
+colnames(demo_data)[5:8] = c("Time.Games", "Presence", "Delay", "Height")
+
+demo_data <- demo_data %>%
+  separate(col = 4, into = c("Game.Exp","HMD.Exp"), sep = "/") %>%
+  separate(col = Height, into = c("Height.m", NA), sep = " ") %>%
+  mutate(subnum = 1:11, .before = Gender) %>%
+  select(-Name)
+
+demo_data
+
+exp_data <- dat %>%
+  filter(is.na(Name)) %>%
+  select(-c(2:10)) 
+  
+ind_sphere_data <- exp_data %>%
+  filter(...1 == "Time spent each sphere")
+
+colnames(ind_sphere_data)[4:8] <-
+  paste0(sapply(strsplit(colnames(ind_sphere_data)[4:8], ".", fixed = T), "[[", 1), ".Map")
+
+colnames(ind_sphere_data)[11:15] <-
+  paste0(sapply(strsplit(colnames(ind_sphere_data)[4:8], ".", fixed = T), "[[", 1), ".Xray")
+
+options(digits.sec = 3)
+
+ind_sphere_data <- ind_sphere_data %>%
+  select(c(4:8, 11:15)) %>%
+  mutate(across(.cols = everything(), ~as.numeric(hms(.x))),
+         subnum = 1:11, .before = 1)
+  
+tot_time_data <- exp_data %>%
+  filter(...1 == "Time duration from start\n in Milliseconds") %>%
+  select(starts_with("Fifth")) %>%
+  rename(Tot.time.map = 1, Tot.time.xray = 2) %>%
+  mutate(across(.cols = everything(), ~as.numeric(hms(.x))),
+         subnum = 1:11, .before = 1)
+
+position_data <- exp_data %>%
+  filter(...1 == "Position")
+
+colnames(position_data)[4:8] <-
+  paste0(sapply(strsplit(colnames(position_data)[4:8], ".", fixed = T), "[[", 1), ".Map")
+
+colnames(position_data)[11:15] <-
+  paste0(sapply(strsplit(colnames(position_data)[4:8], ".", fixed = T), "[[", 1), ".Xray")
+
+position_data <- position_data %>%
+  select(c(4:8, 11:15)) %>%
+  mutate(across(.cols = everything(), ~as.numeric(sapply(strsplit(.x, ","), "[[", 2))),
+         subnum = 1:11, .before = 1)
+
+all_data <- demo_data %>%
+  inner_join(ind_sphere_data, by = "subnum") %>%
+  inner_join(tot_time_data, by = "subnum") 
+  
+  
+write.csv(all_data, file = "all_xray_data.csv", row.names = F)
+
+```
+
+## Use target height as a predictor?
+
+```{r}
+
+all_data_long <- all_data %>%
+  pivot_longer(cols = c(11:20), names_to = c("order","condition"), values_to = "sphere_times",
+               names_sep = "\\.")
+
+position_long <- position_data %>%
+  pivot_longer(cols = c(2:11), names_to = c("order","condition"), values_to = "sphere_heights",
+               names_sep = "\\.")
+
+all_data2 <- all_data_long %>%
+  inner_join(position_long, by = c("subnum","order","condition"))
+  
+
+mod <- lmer(sphere_times ~ condition + (1|subnum), data = all_data2, REML = F)
+
+mod2 <- lmer(sphere_times ~ condition + sphere_heights + (1|subnum), data = all_data2, REML = F)
+
+mod3 <- lmer(sphere_times ~ condition*sphere_heights + (1|subnum), data = all_data2, REML = F)
+
+anova(mod, mod2, mod3)
+
+plot_model(mod3, type = "eff")
+plot_model(mod3, type = "pred", terms = c("sphere_heights", "condition"))
+
+
+```

@@ -86,7 +86,11 @@ all_data <- demo_data %>%
 write.csv(all_data, file = "all_xray_data.csv", row.names = F)
 
 ```
+## Make nicer plots
+```{r}
 
+
+```
 ## Use target height as a predictor?
 
 ```{r}

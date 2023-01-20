@@ -13,6 +13,7 @@ library(lme4)
 library(sjPlot)
 library(superb)
 library(ggpubfigs)
+library(afex)
 ```
 
 ## Read in Excel File
@@ -116,12 +117,16 @@ tot.time.plot <- superbPlot(
   scale_x_discrete(labels=c("1" = "Map", "2" = "X-Ray")) +
   labs(y = "Total Time (s)")
 
+tot.time.plot
+
 ggsave(tot.time.plot, 
        file = "tot.time.plot.jpg", 
        units = "in",
-       width = 7, 
-       height = 5.50,
+       width = 4.2, 
+       height = 3.3,
        dpi = 600)
+
+t.test(all_data$Tot.time.map, all_data$Tot.time.xray, paired = T)
 
 #########################################################################################
 #### Figure 5
@@ -146,9 +151,10 @@ order.plot
 ggsave(order.plot, 
        file = "Fig5.order.plot.jpg", 
        units = "in",
-       width = 7, 
-       height = 5.50,
+       width = 4.8, 
+       height = 3,
        dpi = 600)
+
 
 
 #########################################################################################
@@ -182,8 +188,8 @@ games.scatter.plot
 ggsave(games.scatter.plot, 
        file = "Fig7.games.scatterplot.jpg", 
        units = "in",
-       width = 7.5, 
-       height = 5.50,
+       width = 4.8, 
+       height = 3.,
        dpi = 600)
 
 #########################################################################################
@@ -200,33 +206,36 @@ height.plot <- ggplot(diff_times, aes(x = Height.m, y = diff)) +
   cust_theme_classic() +
   labs(x = "Participant Height (m)", y = "Map Time - X-Ray Time") +
   geom_hline(yintercept =0, linetype = 2) +
-  geom_text(x=1.85, y=35, label="Faster at X-Ray", color = friendly_pal("contrast_three")[1], cex = 5) +
-geom_text(x=1.85, y=-45, label="Faster at Map", color = friendly_pal("contrast_three")[2], cex = 5) 
+  geom_text(x=1.875, y=35, label="Faster at X-Ray", color = friendly_pal("contrast_three")[1], cex = 5) +
+geom_text(x=1.875, y=-45, label="Faster at Map", color = friendly_pal("contrast_three")[2], cex = 5) 
 ggsave(height.plot, 
        file = "Fig8.height.scatterplot.jpg", 
        units = "in",
-       width = 7.5, 
-       height = 5.50,
+       width = 4.8, 
+       height = 3.0,
        dpi = 600)
 
 #########################################################################################
 #### Figure 9
 #########################################################################################
 
+new_hist_data <- c(3.3, 4.2, 3.9, 3.9, 4.5, 4.2,4.9, 3.7, 3.7, 3.9, 4.5)
 
-hist.plot <- ggplot(all_data, aes(x = Presence)) +
+hist.plot <- all_data %>%
+  mutate(spes.tot = new_hist_data) %>%
+  ggplot( aes(x = spes.tot)) +
   geom_histogram(binwidth = 1, color = "black", fill = "gray") +
   cust_theme_classic() +
-  labs(x = "Presence Rating")+ 
+  labs(x = "Average SPES Rating")+ 
   xlim(c(1,5.5)) +
-  scale_y_continuous(expand = c(0,0), limits = c(0,7))
+  scale_y_continuous(expand = c(0,0), limits = c(0,12))
 hist.plot
 
 ggsave(hist.plot, 
        file = "presence.plot.jpg", 
        units = "in",
-       width = 7, 
-       height = 5.50,
+       width = 4.2, 
+       height = 3.3,
        dpi = 600)
 
 
@@ -255,6 +264,8 @@ mod2 <- lmer(sphere_times ~ condition + sphere_heights + (1|subnum), data = all_
 
 mod3 <- lmer(sphere_times ~ condition*sphere_heights + (1|subnum), data = all_data2, REML = F)
 
+modsq <- lmer(sphere_times ~ condition + poly(sphere_heights,2) + (1|subnum), data = all_data2, REML = F)
+
 anova(mod, mod2, mod3)
 
 plot_model(mod3, type = "eff")
@@ -272,9 +283,47 @@ position_interaction_plot
 ggsave(position_interaction_plot, 
        file = "pos.interaction.plot.jpg", 
        units = "in",
-       width = 8, 
-       height = 5.50,
+       width = 4.8, 
+       height = 3.3,
        dpi = 600)
+
+
+```
+## Do stats for sequential times
+
+```{r}
+
+#MLM
+
+seq_dat <- all_data2 %>%
+  mutate(order_num = case_when(
+    order == "First" ~ 1,
+    order == "Second" ~ 2,
+    order == "Third" ~ 3,
+    order == "Fourth" ~ 4,
+    TRUE ~ 5
+  ))
+
+lmer.exp <- lmer(sphere_times ~ condition + (1|subnum), data = seq_dat, REML = F)
+lmer.order <- lmer(sphere_times ~ condition + order_num + (1|subnum), data = seq_dat, REML = F)
+lmer.int <- lmer(sphere_times ~ order_num*condition + (1|subnum), data = seq_dat, REML = F)
+
+anova(lmer.exp, lmer.order, lmer.int)
+
+plot_model(lmer.int, type = "int")
+
+#compare with rm anova (order not ordered)
+
+rmanova <- aov_ez(data = seq_dat,
+                  dv = 'sphere_times',
+                  id = 'subnum',
+                  within = c('order', 'condition'),
+                  type = 3,
+                  anova_table= list(es= "pes")
+  
+)
+
+rmanova$anova_table
 
 
 ```
